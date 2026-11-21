@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Explorador web de herramientas MCP (/mcp-ui): va dentro del dll -->
+    <EmbeddedResource Include="Mcp\McpUi.html" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Migracion.Service\Migracion.Service.csproj" />
   </ItemGroup>
 

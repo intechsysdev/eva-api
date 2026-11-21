@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVA MCP</title>
+<style nonce="__NONCE__">
+  :root {
+    color-scheme: light dark;
+    --fondo: #f6f7f9; --superficie: #ffffff; --texto: #1f2933; --tenue: #5b6770;
+    --borde: #d9dee3; --acento: #1b6ec2; --acento-fondo: #e8f1fb; --acento-texto: #ffffff;
+    --error: #b42318; --error-fondo: #fdecea; --codigo-fondo: #f1f3f5; --ok: #1a7f4b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #14171a; --superficie: #1c2126; --texto: #e6e9ec; --tenue: #9aa5ae;
+      --borde: #323a42; --acento: #6cb0f5; --acento-fondo: #1d2d3f; --acento-texto: #0d1b2a;
+      --error: #ff8a80; --error-fondo: #3a1f1d; --codigo-fondo: #11151a; --ok: #6fd3a0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--texto);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  code, pre, .mono { font-family: ui-monospace, Consolas, "Cascadia Mono", Menlo, monospace; }
+  .pagina { max-width: 1100px; margin: 0 auto; padding: 0 16px 48px; }
+
+  header { background: var(--superficie); border-bottom: 1px solid var(--borde); }
+  .cabecera { max-width: 1100px; margin: 0 auto; padding: 16px; display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  .servidor { margin: 2px 0 0; color: var(--tenue); font-size: .9rem; }
+  .acceso { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  .acceso label { display: grid; gap: 2px; font-size: .8rem; color: var(--tenue); }
+
+  input, select, button { font: inherit; color: inherit; }
+  input, select {
+    background: var(--superficie); border: 1px solid var(--borde); border-radius: 4px;
+    padding: 6px 8px; min-width: 0; width: 100%;
+  }
+  .acceso input { width: 300px; max-width: 70vw; }
+  button {
+    background: var(--acento); color: var(--acento-texto); border: 1px solid var(--acento);
+    border-radius: 4px; padding: 6px 14px; font-weight: 600; cursor: pointer;
+  }
+  button.secundario { background: transparent; color: var(--acento); }
+  button:disabled { opacity: .6; cursor: progress; }
+  :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+  .estado { margin: 16px 0 0; padding: 10px 12px; border-radius: 4px; background: var(--acento-fondo); }
+  .estado.error { background: var(--error-fondo); color: var(--error); }
+  .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 12px; }
+  .barra input { flex: 1 1 240px; }
+  .conteo { color: var(--tenue); font-size: .9rem; }
+
+  details { background: var(--superficie); border: 1px solid var(--borde); border-radius: 4px; margin: 0 0 8px; }
+  details.herramienta { border-left: 4px solid var(--acento); }
+  summary { cursor: pointer; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+  summary .nombre { font-weight: 700; overflow-wrap: anywhere; }
+  summary .titulo { color: var(--tenue); flex: 1 1 200px; }
+  .insignia {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 3px; background: var(--acento); color: var(--acento-texto);
+  }
+  .insignia.escritura { background: var(--error); }
+  .cuerpo { padding: 4px 12px 16px; border-top: 1px solid var(--borde); }
+  .descripcion { margin: 12px 0; max-width: 90ch; }
+  .instrucciones pre { margin: 0 12px 12px; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--tenue); margin: 18px 0 8px; }
+
+  .campos { display: grid; gap: 12px; }
+  .campo { display: grid; gap: 4px 16px; grid-template-columns: 200px minmax(0, 260px) minmax(0, 1fr); align-items: start; }
+  .campo label { font-weight: 600; overflow-wrap: anywhere; }
+  .campo .tipo { display: block; font-weight: 400; font-size: .8rem; color: var(--tenue); }
+  .campo .obligatorio { color: var(--error); }
+  .campo .ayuda { color: var(--tenue); font-size: .88rem; margin: 0; }
+  @media (max-width: 760px) { .campo { grid-template-columns: minmax(0, 1fr); } }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+  .sin-parametros { color: var(--tenue); margin: 0; }
+
+  pre {
+    background: var(--codigo-fondo); border: 1px solid var(--borde); border-radius: 4px;
+    padding: 10px 12px; margin: 0; overflow: auto; max-height: 480px; font-size: .85rem; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  pre.json { white-space: pre; overflow-wrap: normal; }
+  .respuesta.error pre.salida { border-color: var(--error); }
+  .resumen { color: var(--tenue); font-size: .88rem; }
+  .resumen.error { color: var(--error); font-weight: 600; }
+  .resumen.ok { color: var(--ok); font-weight: 600; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="cabecera">
+    <div>
+      <h1>EVA MCP</h1>
+      <p class="servidor" id="servidor">Explorador de las herramientas que este servidor ofrece a un modelo de IA.</p>
+    </div>
+    <form class="acceso" id="acceso">
+      <label for="llave">Llave (Mcp:ApiKey)
+        <input id="llave" name="llave" type="password" autocomplete="off" spellcheck="false" required>
+      </label>
+      <button type="submit" id="conectar">Conectar</button>
+      <button type="button" class="secundario" id="salir" hidden>Salir</button>
+    </form>
+  </div>
+</header>
+
+<main class="pagina">
+  <p class="estado" id="estado" role="status" aria-live="polite">Escribe la llave y pulsa Conectar para cargar las herramientas.</p>
+
+  <details class="instrucciones" id="instrucciones" hidden>
+    <summary><span class="nombre">Instrucciones que recibe el modelo al conectarse</span></summary>
+    <pre id="textoInstrucciones"></pre>
+  </details>
+
+  <div class="barra" id="barra" hidden>
+    <input id="filtro" type="search" placeholder="Filtrar por nombre o descripción" aria-label="Filtrar herramientas">
+    <span class="conteo" id="conteo"></span>
+    <button type="button" class="secundario" id="abrirTodo">Abrir todas</button>
+    <button type="button" class="secundario" id="cerrarTodo">Cerrar todas</button>
+  </div>
+
+  <div id="herramientas"></div>
+</main>
+
+<script nonce="__NONCE__">
+(() => {
+  'use strict';
+
+  // Relativo a esta página: funciona igual si el API está en la raíz o en una carpeta virtual de IIS.
+  const RUTA_MCP = 'mcp';
+  const CLAVE_SESION = 'eva-mcp-llave';
+
+  const $ = id => document.getElementById(id);
+  const estado = $('estado'), contenedor = $('herramientas'), campoLlave = $('llave');
+  let llave = '';
+  let contador = 0;
+
+  /** Crea un elemento. Todo texto entra por textContent: nada de lo que devuelve el servidor se interpreta como HTML. */
+  function el(etiqueta, atributos = {}, ...hijos) {
+    const nodo = document.createElement(etiqueta);
+    for (const [nombre, valor] of Object.entries(atributos)) {
+      if (valor === false || valor == null) continue;
+      if (nombre === 'class') nodo.className = valor;
+      else if (nombre === 'text') nodo.textContent = valor;
+      else nodo.setAttribute(nombre, valor === true ? '' : valor);
+    }
+    nodo.append(...hijos.filter(h => h != null));
+    return nodo;
+  }
+
+  function avisar(mensaje, esError = false) {
+    estado.textContent = mensaje;
+    estado.classList.toggle('error', esError);
+    estado.hidden = !mensaje;
+  }
+
+  /** La respuesta llega como JSON o como flujo de eventos (SSE) con el JSON en líneas "data:". */
+  function leerMensaje(texto, tipoContenido) {
+    if (!(tipoContenido || '').includes('text/event-stream')) return JSON.parse(texto);
+    let ultimo = null;
+    for (const evento of texto.split(/\r?\n\r?\n/)) {
+      const datos = evento.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n');
+      if (!datos) continue;
+      const mensaje = JSON.parse(datos);
+      if ('result' in mensaje || 'error' in mensaje) ultimo = mensaje;
+    }
+    if (!ultimo) throw new Error('El servidor no devolvió una respuesta.');
+    return ultimo;
+  }
+
+  async function rpc(metodo, parametros) {
+    let respuesta;
+    try {
+      respuesta = await fetch(RUTA_MCP, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+          'Authorization': 'Bearer ' + llave
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++contador, method: metodo, params: parametros })
+      });
+    } catch (error) {
+      throw new Error('No se pudo llamar al servidor: ' + error.message);
+    }
+    if (respuesta.status === 401) throw new Error('Llave inválida (401). Revisa Mcp:ApiKey en la configuración del servidor.');
+    if (respuesta.status === 404) throw new Error('El servidor no publica /mcp (404): falta la llave en su configuración.');
+    if (respuesta.status === 429) throw new Error('Demasiadas peticiones (429). Espera un minuto.');
+    const texto = await respuesta.text();
+    if (!respuesta.ok) throw new Error('El servidor respondió ' + respuesta.status + '.');
+    const mensaje = leerMensaje(texto, respuesta.headers.get('content-type'));
+    if (mensaje.error) throw new Error(mensaje.error.message || 'Error del protocolo MCP.');
+    return mensaje.result;
+  }
+
+  function tipoDe(esquema) {
+    let tipo = esquema.type;
+    if (Array.isArray(tipo)) tipo = tipo.find(t => t !== 'null');
+    return tipo || 'string';
+  }
+
+  const NOMBRES_TIPO = { string: 'texto', integer: 'entero', number: 'número', boolean: 'sí / no', array: 'lista, separada por comas' };
+
+  function crearCampo(herramienta, nombre, esquema, obligatorio) {
+    const tipo = tipoDe(esquema);
+    const id = herramienta + '__' + nombre;
+    const ayudaId = id + '__ayuda';
+    const porDefecto = esquema.default;
+    let entrada;
+
+    if (tipo === 'boolean') {
+      entrada = el('select', { id, 'aria-describedby': ayudaId },
+        el('option', { value: '', text: porDefecto == null ? '(sin enviar)' : '(por defecto: ' + porDefecto + ')' }),
+        el('option', { value: 'true', text: 'true' }),
+        el('option', { value: 'false', text: 'false' }));
+    } else {
+      entrada = el('input', {
+        id, 'aria-describedby': ayudaId, autocomplete: 'off', spellcheck: 'false',
+        type: tipo === 'integer' || tipo === 'number' ? 'number' : 'text',
+        step: tipo === 'integer' ? '1' : tipo === 'number' ? 'any' : null,
+        placeholder: porDefecto != null ? 'por defecto: ' + porDefecto : null,
+        required: obligatorio
+      });
+    }
+
+    const fila = el('div', { class: 'campo' },
+      el('label', { for: id },
+        el('span', { class: 'mono', text: nombre }),
+        obligatorio ? el('span', { class: 'obligatorio', text: ' *', title: 'obligatorio' }) : null,
+        el('span', { class: 'tipo', text: (NOMBRES_TIPO[tipo] || tipo) + (obligatorio ? ' · obligatorio' : '') })),
+      entrada,
+      el('p', { class: 'ayuda', id: ayudaId, text: esquema.description || '' }));
+
+    return { nombre, tipo, entrada, fila };
+  }
+
+  function leerArgumentos(campos) {
+    const argumentos = {};
+    for (const { nombre, tipo, entrada } of campos) {
+      const valor = entrada.value.trim();
+      if (valor === '') continue;
+      if (tipo === 'integer') argumentos[nombre] = Number.parseInt(valor, 10);
+      else if (tipo === 'number') argumentos[nombre] = Number(valor);
+      else if (tipo === 'boolean') argumentos[nombre] = valor === 'true';
+      else if (tipo === 'array') argumentos[nombre] = valor.split(',').map(v => v.trim()).filter(Boolean);
+      else argumentos[nombre] = valor;
+    }
+    return argumentos;
+  }
+
+  function crearHerramienta(herramienta) {
+    const esquema = herramienta.inputSchema || {};
+    const propiedades = esquema.properties || {};
+    const obligatorios = new Set(esquema.required || []);
+    const anotaciones = herramienta.annotations || {};
+    const soloLectura = anotaciones.readOnlyHint === true;
+
+    const campos = Object.entries(propiedades)
+      .map(([nombre, definicion]) => crearCampo(herramienta.name, nombre, definicion, obligatorios.has(nombre)));
+
+    const ejecutar = el('button', { type: 'submit', text: 'Ejecutar' });
+    const limpiar = el('button', { type: 'button', class: 'secundario', text: 'Limpiar' });
+    const siguiente = el('button', { type: 'button', class: 'secundario', text: 'Página siguiente', hidden: true });
+
+    const peticion = el('pre', { class: 'json' });
+    const salida = el('pre', { class: 'salida', tabindex: '0' });
+    const resumen = el('span', { class: 'resumen', role: 'status', 'aria-live': 'polite' });
+    const respuesta = el('div', { class: 'respuesta', hidden: true },
+      el('h2', { text: 'Argumentos enviados' }), peticion,
+      el('h2', { text: 'Respuesta' }), salida);
+
+    const formulario = el('form', {},
+      el('h2', { text: 'Parámetros' }),
+      campos.length
+        ? el('div', { class: 'campos' }, ...campos.map(c => c.fila))
+        : el('p', { class: 'sin-parametros', text: 'Esta herramienta no recibe parámetros.' }),
+      el('div', { class: 'acciones' }, ejecutar, limpiar, siguiente, resumen));
+
+    let siguienteDesplazamiento = null;
+
+    async function llamar() {
+      const argumentos = leerArgumentos(campos);
+      ejecutar.disabled = true;
+      siguiente.hidden = true;
+      resumen.className = 'resumen';
+      resumen.textContent = 'Consultando…';
+      peticion.textContent = JSON.stringify(argumentos, null, 2);
+      const inicio = performance.now();
+
+      try {
+        const resultado = await rpc('tools/call', { name: herramienta.name, arguments: argumentos });
+        const tiempo = Math.round(performance.now() - inicio) + ' ms';
+        let cuerpo = (resultado.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+        let detalle = '';
+        let esJson = false;
+        siguienteDesplazamiento = null;
+        try {
+          const datos = JSON.parse(cuerpo);
+          cuerpo = JSON.stringify(datos, null, 2);
+          esJson = true;
+          if (typeof datos.total === 'number') {
+            detalle = ' · ' + datos.cantidad + ' de ' + datos.total + ' filas';
+            if (datos.hay_mas) siguienteDesplazamiento = datos.siguiente_desplazamiento;
+          }
+        } catch { /* la respuesta no es JSON: se muestra tal cual */ }
+
+        salida.textContent = cuerpo;
+        // El JSON conserva su sangría; un mensaje de texto se ajusta al ancho.
+        salida.classList.toggle('json', esJson);
+        respuesta.classList.toggle('error', resultado.isError === true);
+        resumen.textContent = (resultado.isError ? 'La herramienta devolvió un error' : 'Correcto') + ' · ' + tiempo + detalle;
+        resumen.className = 'resumen ' + (resultado.isError ? 'error' : 'ok');
+        siguiente.hidden = siguienteDesplazamiento == null || !campos.some(c => c.nombre === 'desplazamiento');
+      } catch (error) {
+        salida.textContent = error.message;
+        salida.classList.remove('json');
+        respuesta.classList.add('error');
+        resumen.textContent = 'No se pudo ejecutar';
+        resumen.className = 'resumen error';
+      } finally {
+        respuesta.hidden = false;
+        ejecutar.disabled = false;
+      }
+    }
+
+    formulario.addEventListener('submit', evento => { evento.preventDefault(); llamar(); });
+    limpiar.addEventListener('click', () => { formulario.reset(); respuesta.hidden = true; siguiente.hidden = true; resumen.textContent = ''; });
+    siguiente.addEventListener('click', () => {
+      campos.find(c => c.nombre === 'desplazamiento').entrada.value = siguienteDesplazamiento;
+      llamar();
+    });
+
+    const bloque = el('details', { class: 'herramienta' },
+      el('summary', {},
+        el('span', { class: 'insignia' + (soloLectura ? '' : ' escritura'), text: soloLectura ? 'solo lectura' : 'modifica datos' }),
+        el('span', { class: 'nombre mono', text: herramienta.name }),
+        el('span', { class: 'titulo', text: anotaciones.title || herramienta.title || '' })),
+      el('div', { class: 'cuerpo' },
+        el('p', { class: 'descripcion', text: herramienta.description || '' }),
+        formulario,
+        respuesta));
+
+    bloque.dataset.busqueda = (herramienta.name + ' ' + (anotaciones.title || '') + ' ' + (herramienta.description || '')).toLowerCase();
+    return bloque;
+  }
+
+  function filtrar() {
+    const texto = $('filtro').value.trim().toLowerCase();
+    let visibles = 0;
+    for (const bloque of contenedor.children) {
+      const coincide = !texto || bloque.dataset.busqueda.includes(texto);
+      bloque.hidden = !coincide;
+      if (coincide) visibles++;
+    }
+    $('conteo').textContent = visibles + ' de ' + contenedor.children.length + ' herramientas';
+  }
+
+  function desconectar(mensaje, esError = false) {
+    llave = '';
+    try { sessionStorage.removeItem(CLAVE_SESION); } catch { /* sin almacenamiento: no pasa nada */ }
+    contenedor.replaceChildren();
+    $('barra').hidden = true;
+    $('instrucciones').hidden = true;
+    $('salir').hidden = true;
+    $('servidor').textContent = 'Explorador de las herramientas que este servidor ofrece a un modelo de IA.';
+    avisar(mensaje, esError);
+  }
+
+  async function conectar(nuevaLlave) {
+    llave = nuevaLlave.trim();
+    $('conectar').disabled = true;
+    avisar('Conectando…');
+    try {
+      const inicio = await rpc('initialize', {
+        protocolVersion: '2025-06-18', capabilities: {},
+        clientInfo: { name: 'eva-mcp-explorador', version: '1.0.0' }
+      });
+      const lista = await rpc('tools/list', {});
+      const herramientas = lista.tools || [];
+
+      const info = inicio.serverInfo || {};
+      $('servidor').textContent = [info.title || info.name, info.name && info.title ? '(' + info.name + ')' : '', info.version ? 'v' + info.version : '', '· protocolo ' + inicio.protocolVersion]
+        .filter(Boolean).join(' ');
+      $('textoInstrucciones').textContent = inicio.instructions || '';
+      $('instrucciones').hidden = !inicio.instructions;
+
+      contenedor.replaceChildren(...herramientas.map(crearHerramienta));
+      $('barra').hidden = false;
+      $('salir').hidden = false;
+      $('filtro').value = '';
+      filtrar();
+      avisar('');
+      campoLlave.value = '';
+      try { sessionStorage.setItem(CLAVE_SESION, llave); } catch { /* sin almacenamiento: habrá que escribirla de nuevo */ }
+    } catch (error) {
+      desconectar(error.message, true);
+    } finally {
+      $('conectar').disabled = false;
+    }
+  }
+
+  $('acceso').addEventListener('submit', evento => { evento.preventDefault(); conectar(campoLlave.value); });
+  $('salir').addEventListener('click', () => desconectar('Sesión cerrada. Escribe la llave para volver a conectar.'));
+  $('filtro').addEventListener('input', filtrar);
+  $('abrirTodo').addEventListener('click', () => { for (const b of contenedor.children) b.open = true; });
+  $('cerrarTodo').addEventListener('click', () => { for (const b of contenedor.children) b.open = false; });
+
+  let guardada = null;
+  try { guardada = sessionStorage.getItem(CLAVE_SESION); } catch { /* sin almacenamiento */ }
+  if (guardada) conectar(guardada);
+})();
+</script>
+</body>
+</html>

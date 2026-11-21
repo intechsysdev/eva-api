@@ -26,6 +26,12 @@ namespace Migracion.Api.Mcp
         /// <summary>Máximo de filas que una herramienta devuelve por llamada.</summary>
         public int LimiteMaximo { get; set; } = 100;
 
+        /// <summary>
+        /// Publica el explorador web de herramientas en /mcp-ui (como Swagger). La
+        /// página pide la llave; ponerlo en false la quita sin apagar /mcp.
+        /// </summary>
+        public bool Explorador { get; set; } = true;
+
         public bool Habilitado =>
             !string.IsNullOrWhiteSpace(ApiKey) && ApiKey.Trim().Length >= LongitudMinimaLlave;
     }

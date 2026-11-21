@@ -14,6 +14,7 @@ namespace Migracion.Api.Mcp
     public static class McpServiceExtensions
     {
         public const string Ruta = "/mcp";
+        public const string RutaExplorador = "/mcp-ui";
         private const string Politica = "McpAcceso";
 
         private const string Instrucciones =
@@ -83,6 +84,13 @@ namespace Migracion.Api.Mcp
             }
 
             app.MapMcp(Ruta).RequireAuthorization(Politica);
+
+            if (settings.Explorador)
+            {
+                // Anónimo como Swagger: la página no trae datos, pide la llave para consultar.
+                app.MapGet(RutaExplorador, (HttpContext http) => McpUi.Responder(http))
+                    .ExcludeFromDescription();
+            }
             app.Logger.LogInformation("MCP habilitado en {Ruta} ({Compania}).", Ruta,
                 string.IsNullOrWhiteSpace(settings.Compania) ? "sin compañía por defecto" : "compañía " + settings.Compania);
 

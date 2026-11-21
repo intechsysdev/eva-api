@@ -26,6 +26,13 @@ $b = New-Object byte[] 32
 
 Al arrancar, el log dice `MCP habilitado en /mcp` o `MCP deshabilitado: configure Mcp:ApiKey`.
 
+## Explorador web (como Swagger)
+
+`https://<servidor>:<puerto>/mcp-ui` muestra las herramientas con su descripción y parámetros, y permite
+ejecutarlas desde el navegador. Se escribe la llave arriba y se pulsa **Conectar**; la llave queda solo en
+esa pestaña y se borra con **Salir** o al cerrarla. La página no trae datos por sí sola: todo lo consulta
+contra `/mcp` con la llave. Se quita con `"Explorador": false` en la sección `Mcp` (o `Mcp__Explorador`).
+
 ## Conectar un modelo
 
 Cualquier cliente MCP con transporte HTTP sirve. Datos de conexión:
