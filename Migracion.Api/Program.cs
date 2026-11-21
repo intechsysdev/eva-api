@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using Migracion.Api.Handlers;
 using Migracion.Api.HealthChecks;
 using Migracion.Api.Logging;
+using Migracion.Api.Mcp;
 using Migracion.Api.Middleware;
 using Migracion.Api.Models;
 using Migracion.Persistence.DataBase;
@@ -205,6 +206,9 @@ builder.Services.AddSwaggerGen(c =>
                  });
 });
 
+// Servidor MCP (/mcp): consultas de solo lectura para modelos de IA. Ver Mcp/README.md
+builder.AddEvaMcp();
+
 var app = builder.Build();
 
 // Debe ir de primero para capturar cualquier excepción del pipeline
@@ -222,5 +226,6 @@ app.UseRateLimiter();
 app.UseResponseCompression();
 app.MapControllers();
 app.MapHealthChecks("/health").DisableRateLimiting();
+app.MapEvaMcp();
 
 app.Run();
