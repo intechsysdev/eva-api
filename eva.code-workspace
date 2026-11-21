@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "E:/evagit/eva"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../SeguimientoEvaOnline/Code/WebApps/SeguimientoOnlineCore"
+		},
+		{
+			"path": "../../../SeguimientoEvaOnline/Code/API_NewVersion/Seguridad.API"
+		},
+		{
+			"path": "E:/evagit/seguimiento-online"
+		}
+	],
+	"settings": {
+		"github-enterprise.uri": "https://github.com/intechsysdev"
+	}
+}

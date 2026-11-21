@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet build \"f:\\\\Intechsys_Proj\\\\EVA\\\\Code\\\\NewVersion\\\\Migracion.Api\\\\Migracion.Api.csproj\" -c Debug --nologo -v m 2>&1)"
+    ]
+  }
+}

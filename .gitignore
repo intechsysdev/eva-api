@@ -1,0 +1,32 @@
+# Compilación
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+PubTmp/
+publish/
+*.pubxml.user
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# NuGet
+*.nupkg
+packages/
+
+# Logs y temporales
+logs/
+*.log
+*.tmp
+
+# Claude Code (configuración local)
+.claude/settings.local.json
+
+# Rastros de Team Foundation (por si vuelven a aparecer)
+*.vssscc
+*.vspscc
+$tf/
