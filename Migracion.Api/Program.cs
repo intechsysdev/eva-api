@@ -150,6 +150,7 @@ builder.Services.AddTransient<IExhibicionCommand, ExhibicionCommand>();
 builder.Services.AddTransient<IExhibicionesQueries, ExhibicionesQueries>();
 // Bonificados (módulo web de campañas y reglas). Ver Migracion.Service/Bonificados.
 builder.Services.AddTransient<Migracion.Service.Bonificados.IBonificadosService, Migracion.Service.Bonificados.BonificadosService>();
+builder.Services.AddTransient<Migracion.Service.Bonificados.IBonificadosPedidoService, Migracion.Service.Bonificados.BonificadosPedidoService>();
 builder.Services.AddTransient<IMaterialPOPCommand, MaterialPOPCommand>();
 builder.Services.AddTransient<IMaterialPOPQueries, MaterialPOPQueries>();
 builder.Services.AddTransient<IMarcasPOPCommand, MarcasPOPCommand>();

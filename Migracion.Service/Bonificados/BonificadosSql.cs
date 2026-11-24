@@ -1,4 +1,3 @@
-using IBM.Data.Db2;
 using Microsoft.EntityFrameworkCore;
 using Migracion.Persistence.DataBase;
 using System;
@@ -90,9 +89,14 @@ namespace Migracion.Service.Bonificados
             var comando = _conexion.CreateCommand();
             comando.CommandText = sql;
             comando.Transaction = _transaccion;
+            // CreateParameter: con la conexión de DB2/Informix es un DB2Parameter;
+            // así las mismas sentencias corren en la prueba de integración (SQLite).
             for (var i = 0; i < parametros.Length; i++)
             {
-                comando.Parameters.Add(new DB2Parameter($"p{i}", parametros[i] ?? DBNull.Value));
+                var parametro = comando.CreateParameter();
+                parametro.ParameterName = $"p{i}";
+                parametro.Value = parametros[i] ?? DBNull.Value;
+                comando.Parameters.Add(parametro);
             }
             return comando;
         }

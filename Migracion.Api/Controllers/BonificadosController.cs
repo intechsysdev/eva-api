@@ -19,11 +19,51 @@ namespace Migracion.Api.Controllers
     public class BonificadosController : ControllerBase
     {
         private readonly IBonificadosService _servicio;
+        private readonly IBonificadosPedidoService _pedidos;
 
-        public BonificadosController(IBonificadosService servicio)
+        public BonificadosController(IBonificadosService servicio, IBonificadosPedidoService pedidos)
         {
             _servicio = servicio;
+            _pedidos = pedidos;
         }
+
+        // ---- App: descarga y validación en línea ----
+
+        /// <summary>Tablas espejo para la sincronización de la app (reglas vigentes del vendedor).</summary>
+        [HttpGet("Sync/{cmpy}/{codusu}/{reg}/{teri}")]
+        public Task<ActionResult<BonSyncDto>> Sync(string cmpy, string codusu, string reg, string teri) =>
+            Ejecutar(() => _pedidos.SyncAsync(cmpy, codusu, reg, teri));
+
+        /// <summary>Valida bonificados sin guardar nada (V-01..V-10 con datos frescos).</summary>
+        [HttpPost("Validar")]
+        public Task<ActionResult<BonResultadoDto>> Validar([FromBody] BonPedidoDto pedido) =>
+            Ejecutar(() => _pedidos.ValidarAsync(pedido));
+
+        // ---- Grupos mixtos ----
+
+        [HttpGet("Grupos/{cmpy}")]
+        public Task<ActionResult<List<BonGrupoEditarDto>>> Grupos(string cmpy) =>
+            Ejecutar(() => _servicio.GruposAsync(cmpy));
+
+        [HttpGet("Grupo/{cmpy}/{codigo}")]
+        public Task<ActionResult<BonGrupoEditarDto>> Grupo(string cmpy, string codigo) =>
+            Ejecutar(() => _servicio.GrupoAsync(cmpy, codigo));
+
+        [HttpPost("Grupo")]
+        public Task<ActionResult<BonGrupoEditarDto>> CrearGrupo([FromBody] BonGrupoEditarDto datos) =>
+            Ejecutar(() => _servicio.CrearGrupoAsync(datos));
+
+        [HttpPut("Grupo")]
+        public Task<ActionResult<BonGrupoEditarDto>> ActualizarGrupo([FromBody] BonGrupoEditarDto datos) =>
+            Ejecutar(() => _servicio.ActualizarGrupoAsync(datos));
+
+        [HttpDelete("Grupo/{cmpy}/{codigo}")]
+        public Task<ActionResult<bool>> EliminarGrupo(string cmpy, string codigo, [FromQuery] string? usuario) =>
+            Ejecutar(async () =>
+            {
+                await _servicio.EliminarGrupoAsync(cmpy, codigo, usuario);
+                return true;
+            });
 
         [HttpGet("Catalogos/{cmpy}")]
         public Task<ActionResult<BonCatalogosDto>> Catalogos(string cmpy) =>

@@ -72,6 +72,11 @@ namespace Migracion.Models.Bonificados
         [JsonPropertyName("medida")] public string Medida { get; set; } = "UNIDADES";
         [JsonPropertyName("cantidadMinima")] public decimal? CantidadMinima { get; set; }
         [JsonPropertyName("montoMinimo")] public decimal? MontoMinimo { get; set; }
+        /// <summary>
+        /// rbc_multiplo: el beneficio se repite por cada N unidades adicionales
+        /// sobre la cantidad mínima (Deco 3+1: mínimo 3, múltiplo 3). Null = una vez.
+        /// </summary>
+        [JsonPropertyName("multiplo")] public decimal? Multiplo { get; set; }
 
         /// <summary>Beneficios de una regla sin escalonamiento (mob_rbonregbenef).</summary>
         [JsonPropertyName("beneficios")] public List<BonBeneficioDto> Beneficios { get; set; } = new();

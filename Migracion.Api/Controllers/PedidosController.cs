@@ -17,10 +17,16 @@ namespace Migracion.Api.Controllers
     public class PedidosController : ControllerBase
     {
         private readonly IPedidosQueries _pedidosQueries;
+        private readonly Migracion.Service.Bonificados.IBonificadosPedidoService _bonificados;
+        private readonly ILogger<PedidosController> _logger;
 
-        public PedidosController(IPedidosQueries pedidosQueries)
+        public PedidosController(IPedidosQueries pedidosQueries,
+            Migracion.Service.Bonificados.IBonificadosPedidoService bonificados,
+            ILogger<PedidosController> logger)
         {
             _pedidosQueries = pedidosQueries;
+            _bonificados = bonificados;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -123,9 +129,34 @@ namespace Migracion.Api.Controllers
 
         [HttpPost]
         [Route("InsertFull")]
-        public int InsertFull(mob_rordDto item)
+        public async Task<int> InsertFull(mob_rordDto item)
         {
-            return _pedidosQueries.InsertFull(item);
+            var resultado = _pedidosQueries.InsertFull(item);
+
+            // Bonificados: solo las versiones de la app que mandan el bloque
+            // (una lista vacía quita los del envío anterior). Va después del
+            // pedido y en su propia transacción: si falla, el pedido ya quedó
+            // guardado y la app no lo reintenta por esto.
+            if (item.bonificacion != null && item.encabezado != null)
+            {
+                try
+                {
+                    var revision = await _bonificados.RegistrarAsync(item.encabezado, item.bonificacion);
+                    if (revision is { Valido: false })
+                    {
+                        _logger.LogWarning("Pedido {Num} ({Cmpy}): bonificados rechazados {Codigos}.",
+                            item.encabezado.orh_num, item.encabezado.orh_cmpy,
+                            string.Join(", ", revision.Violaciones.Select(v => $"{v.Regla} {v.Codigo}")));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "No se registraron los bonificados del pedido {Num} ({Cmpy}).",
+                        item.encabezado.orh_num, item.encabezado.orh_cmpy);
+                }
+            }
+
+            return resultado;
         }
 
 

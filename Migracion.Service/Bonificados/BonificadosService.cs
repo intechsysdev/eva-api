@@ -33,6 +33,11 @@ namespace Migracion.Service.Bonificados
         Task<BonReglaDto> CrearReglaAsync(BonReglaDto datos);
         Task<BonReglaDto> ActualizarReglaAsync(BonReglaDto datos);
         Task EliminarReglaAsync(string cmpy, string codigo, string? usuario);
+        Task<List<BonGrupoEditarDto>> GruposAsync(string cmpy);
+        Task<BonGrupoEditarDto> GrupoAsync(string cmpy, string codigo);
+        Task<BonGrupoEditarDto> CrearGrupoAsync(BonGrupoEditarDto datos);
+        Task<BonGrupoEditarDto> ActualizarGrupoAsync(BonGrupoEditarDto datos);
+        Task EliminarGrupoAsync(string cmpy, string codigo, string? usuario);
     }
 
     /// <summary>
@@ -384,7 +389,7 @@ namespace Migracion.Service.Bonificados
             var alcance = await Hijas("SELECT rbe_regla, rbe_tipoalcance, rbe_valor FROM mob_rbonalcance",
                 "rbe_regla", "rbe_cmpy", "rbe_regla, rbe_tipoalcance, rbe_valor");
             var condiciones = await Hijas(
-                "SELECT rbc_regla, rbc_seq, rbc_grupo, rbc_linea, rbc_subl, rbc_id, rbc_cantmin, rbc_valmin, rbc_foco FROM mob_rbonregcond",
+                "SELECT rbc_regla, rbc_seq, rbc_grupo, rbc_linea, rbc_subl, rbc_id, rbc_cantmin, rbc_multiplo, rbc_valmin, rbc_foco FROM mob_rbonregcond",
                 "rbc_regla", "rbc_cmpy", "rbc_regla, rbc_seq");
             var niveles = await Hijas("SELECT rbn_regla, rbn_nivel, rbn_desde, rbn_hasta FROM mob_rbonnivel",
                 "rbn_regla", "rbn_cmpy", "rbn_regla, rbn_nivel");
@@ -473,6 +478,7 @@ namespace Migracion.Service.Bonificados
                 {
                     dto.CantidadMinima = primera?.Decimal("rbc_cantmin");
                     dto.MontoMinimo = primera?.Decimal("rbc_valmin");
+                    dto.Multiplo = primera?.Decimal("rbc_multiplo");
                 }
 
                 foreach (var n in nivelesRegla)
@@ -724,10 +730,12 @@ namespace Migracion.Service.Bonificados
             r.Medida = (r.Medida ?? Unidades).Trim().ToUpperInvariant();
             if (r.Medida is not (Unidades or Monto)) throw new BonificadosException("La medida debe ser UNIDADES o MONTO.");
 
+            if (r.Multiplo is <= 0) r.Multiplo = null;
             if (r.UsaEscalonamiento)
             {
                 r.CantidadMinima = null;
                 r.MontoMinimo = null;
+                r.Multiplo = null;
                 r.Beneficios = new List<BonBeneficioDto>();
                 r.Niveles = (r.Niveles ?? new List<BonNivelDto>()).OrderBy(n => n.Desde).ToList();
                 if (r.Niveles.Count == 0) throw new BonificadosException("Agrega al menos un nivel de escalonamiento.");
@@ -757,6 +765,8 @@ namespace Migracion.Service.Bonificados
                 if (r.MontoMinimo is <= 0) r.MontoMinimo = null;
                 if (r.CantidadMinima == null && r.MontoMinimo == null)
                     throw new BonificadosException("Indica una cantidad mínima, un monto mínimo o ambos.");
+                if (r.Multiplo != null && r.CantidadMinima == null)
+                    throw new BonificadosException("Para repetir el beneficio por cada N unidades hace falta una cantidad mínima.");
 
                 r.Beneficios = (r.Beneficios ?? new List<BonBeneficioDto>()).ToList();
                 if (r.Beneficios.Count == 0) throw new BonificadosException("Agrega al menos un beneficio.");
@@ -922,8 +932,9 @@ namespace Migracion.Service.Bonificados
 
                 await sql.EjecutarAsync(
                     "INSERT INTO mob_rbonregcond (rbc_cmpy, rbc_regla, rbc_seq, rbc_operador, rbc_grupo, rbc_linea, rbc_subl, " +
-                    "rbc_id, rbc_cantmin, rbc_valmin, rbc_foco) VALUES (?, ?, ?, 'OR', ?, ?, ?, ?, ?, ?, 'N')",
-                    cmpy, regla, ++seq, grupo, linea, sublinea, producto, cantidadMinima, montoMinimo);
+                    "rbc_id, rbc_cantmin, rbc_multiplo, rbc_valmin, rbc_foco) VALUES (?, ?, ?, 'OR', ?, ?, ?, ?, ?, ?, ?, 'N')",
+                    cmpy, regla, ++seq, grupo, linea, sublinea, producto, cantidadMinima,
+                    r.UsaEscalonamiento ? null : r.Multiplo, montoMinimo);
             }
 
             // Niveles: "hasta" es el arranque del siguiente menos una unidad (o un centavo).
@@ -1091,6 +1102,206 @@ namespace Migracion.Service.Bonificados
         }
 
         // =====================================================================
+        // Grupos mixtos
+        // =====================================================================
+
+        private static readonly string[] NivelesGrupo = { "LINEA", "SUBLINEA", "REFERENCIA" };
+
+        public async Task<List<BonGrupoEditarDto>> GruposAsync(string cmpy)
+        {
+            cmpy = Compania(cmpy);
+            var sql = await BonificadosSql.AbrirAsync(_contexto);
+            return await CargarGruposAsync(sql, cmpy, null);
+        }
+
+        public async Task<BonGrupoEditarDto> GrupoAsync(string cmpy, string codigo)
+        {
+            cmpy = Compania(cmpy);
+            codigo = Codigo(codigo, "grupo");
+            var sql = await BonificadosSql.AbrirAsync(_contexto);
+            return (await CargarGruposAsync(sql, cmpy, codigo)).FirstOrDefault()
+                ?? throw new BonificadosException($"No existe el grupo {codigo}.", 404);
+        }
+
+        public Task<BonGrupoEditarDto> CrearGrupoAsync(BonGrupoEditarDto datos) => GuardarGrupoAsync(datos, esNuevo: true);
+
+        public Task<BonGrupoEditarDto> ActualizarGrupoAsync(BonGrupoEditarDto datos) => GuardarGrupoAsync(datos, esNuevo: false);
+
+        public async Task EliminarGrupoAsync(string cmpy, string codigo, string? usuario)
+        {
+            cmpy = Compania(cmpy);
+            codigo = Codigo(codigo, "grupo");
+            var sql = await BonificadosSql.AbrirAsync(_contexto);
+            var anterior = (await CargarGruposAsync(sql, cmpy, codigo)).FirstOrDefault()
+                ?? throw new BonificadosException($"No existe el grupo {codigo}.", 404);
+            if (anterior.Reglas.Count > 0)
+                throw new BonificadosException(
+                    $"El grupo {codigo} lo usan las reglas {string.Join(", ", anterior.Reglas.Take(10))}. Quítalo de ellas o desactívalo.", 409);
+
+            sql.Iniciar();
+            try
+            {
+                await sql.EjecutarAsync("DELETE FROM mob_rbongrupodet WHERE grd_cmpy = ? AND grd_grupo = ?", cmpy, codigo);
+                await sql.EjecutarAsync("DELETE FROM mob_rbongrupo WHERE grp_cmpy = ? AND grp_grupo = ?", cmpy, codigo);
+                sql.Confirmar();
+            }
+            catch (Exception ex)
+            {
+                sql.Deshacer();
+                throw Traducir(ex);
+            }
+            await AuditarAsync(sql, cmpy, null, null, "GRUPO ELIMINADO", anterior, null, usuario);
+        }
+
+        private async Task<BonGrupoEditarDto> GuardarGrupoAsync(BonGrupoEditarDto datos, bool esNuevo)
+        {
+            var cmpy = Compania(datos.Cmpy);
+            datos.Nombre = (datos.Nombre ?? "").Trim();
+            if (datos.Nombre.Length == 0) throw new BonificadosException("El nombre del grupo es obligatorio.");
+            if (datos.Nombre.Length > 100) throw new BonificadosException("El nombre del grupo admite 100 caracteres.");
+
+            var elementos = (datos.Elementos ?? new List<BonGrupoElementoDto>())
+                .Select(e => new BonGrupoElementoDto { Nivel = (e.Nivel ?? "").Trim().ToUpperInvariant(), Valor = (e.Valor ?? "").Trim() })
+                .Where(e => e.Valor.Length > 0)
+                .GroupBy(e => (e.Nivel, e.Valor.ToUpperInvariant())).Select(g => g.First())
+                .ToList();
+            if (elementos.Count == 0) throw new BonificadosException("El grupo necesita al menos un elemento.");
+            if (elementos.Count > 999) throw new BonificadosException("Un grupo admite hasta 999 elementos.");
+            foreach (var e in elementos)
+            {
+                if (!NivelesGrupo.Contains(e.Nivel)) throw new BonificadosException($"Nivel de elemento desconocido: {e.Nivel}.");
+                if (e.Valor.Length > 21) throw new BonificadosException($"El código {e.Valor} es demasiado largo.");
+                if (e.Nivel == "SUBLINEA" && e.Valor.Split('|').Length != 2)
+                    throw new BonificadosException("Cada sublínea del grupo debe llegar como \"linea|sublinea\".");
+            }
+
+            var sql = await BonificadosSql.AbrirAsync(_contexto);
+            await ValidarElementosAsync(sql, cmpy, elementos);
+
+            BonGrupoEditarDto? anterior = null;
+            var codigo = "";
+            if (!esNuevo)
+            {
+                codigo = Codigo(datos.Codigo, "grupo");
+                anterior = (await CargarGruposAsync(sql, cmpy, codigo)).FirstOrDefault()
+                    ?? throw new BonificadosException($"No existe el grupo {codigo}.", 404);
+            }
+
+            sql.Iniciar();
+            try
+            {
+                if (esNuevo)
+                {
+                    codigo = await SiguienteCodigoAsync(sql, "mob_rbongrupo", "grp_cmpy", "grp_grupo", "GRP", cmpy);
+                    await sql.EjecutarAsync(
+                        "INSERT INTO mob_rbongrupo (grp_cmpy, grp_grupo, grp_descr, grp_activo, estado_envio) VALUES (?, ?, ?, ?, 0)",
+                        cmpy, codigo, datos.Nombre, SN(datos.Activo));
+                }
+                else
+                {
+                    await sql.EjecutarAsync(
+                        "UPDATE mob_rbongrupo SET grp_descr = ?, grp_activo = ?, estado_envio = 0 WHERE grp_cmpy = ? AND grp_grupo = ?",
+                        datos.Nombre, SN(datos.Activo), cmpy, codigo);
+                    await sql.EjecutarAsync("DELETE FROM mob_rbongrupodet WHERE grd_cmpy = ? AND grd_grupo = ?", cmpy, codigo);
+                }
+
+                var seq = 0;
+                foreach (var e in elementos)
+                {
+                    await sql.EjecutarAsync(
+                        "INSERT INTO mob_rbongrupodet (grd_cmpy, grd_grupo, grd_seq, grd_nivel, grd_valor) VALUES (?, ?, ?, ?, ?)",
+                        cmpy, codigo, ++seq, e.Nivel, e.Valor);
+                }
+                sql.Confirmar();
+            }
+            catch (Exception ex)
+            {
+                sql.Deshacer();
+                throw Traducir(ex);
+            }
+
+            var guardado = (await CargarGruposAsync(sql, cmpy, codigo)).First();
+            await AuditarAsync(sql, cmpy, null, null, esNuevo ? "GRUPO CREADO" : "GRUPO MODIFICADO", anterior, guardado, datos.Usuario);
+            return guardado;
+        }
+
+        private static async Task ValidarElementosAsync(BonificadosSql sql, string cmpy, List<BonGrupoElementoDto> elementos)
+        {
+            var productos = elementos.Where(e => e.Nivel == "REFERENCIA").Select(e => e.Valor).ToList();
+            var existentes = await NombresDeProductosAsync(sql, cmpy, productos);
+            var faltan = productos.Where(p => !existentes.ContainsKey(p)).ToList();
+            if (faltan.Count > 0) throw new BonificadosException($"No existen estos productos: {string.Join(", ", faltan.Take(10))}.");
+
+            foreach (var e in elementos.Where(e => e.Nivel == "LINEA"))
+            {
+                if (await sql.ContarAsync("SELECT COUNT(*) FROM mob_rlinea WHERE rln_cmpy = ? AND rln_linea = ?", cmpy, e.Valor) == 0)
+                    throw new BonificadosException($"No existe la línea {e.Valor}.");
+            }
+            foreach (var par in elementos.Where(e => e.Nivel == "SUBLINEA").Select(e => e.Valor.Split('|')))
+            {
+                if (await sql.ContarAsync("SELECT COUNT(*) FROM mob_rsublineas WHERE rsb_cmpy = ? AND rsb_linea = ? AND rsb_subl = ?",
+                        cmpy, par[0], par[1]) == 0)
+                    throw new BonificadosException($"No existe la sublínea {par[1]} de la línea {par[0]}.");
+            }
+        }
+
+        /// <param name="codigo">Null = todos los grupos de la compañía.</param>
+        private static async Task<List<BonGrupoEditarDto>> CargarGruposAsync(BonificadosSql sql, string cmpy, string? codigo)
+        {
+            var filtro = codigo == null ? "" : " AND grp_grupo = ?";
+            var parametros = codigo == null ? new object?[] { cmpy } : new object?[] { cmpy, codigo };
+            var grupos = await sql.ConsultarAsync(
+                $"SELECT grp_grupo, grp_descr, grp_activo FROM mob_rbongrupo WHERE grp_cmpy = ?{filtro} ORDER BY grp_descr", parametros);
+            if (grupos.Count == 0) return new List<BonGrupoEditarDto>();
+
+            var detalle = (await sql.ConsultarAsync(
+                    $"SELECT grd_grupo, grd_seq, grd_nivel, grd_valor FROM mob_rbongrupodet WHERE grd_cmpy = ?" +
+                    (codigo == null ? "" : " AND grd_grupo = ?") + " ORDER BY grd_grupo, grd_seq", parametros))
+                .ToLookup(f => f.TextoO("grd_grupo"));
+
+            // Reglas que lo usan como agrupación o como "menor valor del grupo".
+            var usos = (await sql.ConsultarAsync(
+                    "SELECT rbc_grupo AS grupo, rbc_regla AS regla FROM mob_rbonregcond WHERE rbc_cmpy = ? AND rbc_grupo IS NOT NULL " +
+                    "UNION SELECT rbb_grupo AS grupo, rbb_regla AS regla FROM mob_rbonregbenef WHERE rbb_cmpy = ? AND rbb_grupo IS NOT NULL",
+                    cmpy, cmpy))
+                .ToLookup(f => f.TextoO("grupo"), f => f.TextoO("regla"));
+
+            // Nombres para mostrar: productos, líneas y sublíneas citados.
+            var ids = detalle.SelectMany(g => g).Where(d => d.Texto("grd_nivel") == "REFERENCIA").Select(d => d.TextoO("grd_valor")).Distinct().ToList();
+            var productos = await NombresDeProductosAsync(sql, cmpy, ids);
+            var lineas = (await sql.ConsultarAsync("SELECT rln_linea, rln_descr FROM mob_rlinea WHERE rln_cmpy = ?", cmpy))
+                .ToDictionary(f => f.TextoO("rln_linea"), f => f.Texto("rln_descr") ?? f.TextoO("rln_linea"), StringComparer.OrdinalIgnoreCase);
+            var sublineas = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in await sql.ConsultarAsync("SELECT rsb_linea, rsb_subl, rsb_descr FROM mob_rsublineas WHERE rsb_cmpy = ?", cmpy))
+                sublineas[$"{f.TextoO("rsb_linea")}|{f.TextoO("rsb_subl")}"] = f.Texto("rsb_descr") ?? f.TextoO("rsb_subl");
+
+            return grupos.Select(g =>
+            {
+                var cod = g.TextoO("grp_grupo");
+                return new BonGrupoEditarDto
+                {
+                    Cmpy = cmpy,
+                    Codigo = cod,
+                    Nombre = g.Texto("grp_descr") ?? cod,
+                    Activo = g.Texto("grp_activo") != "N",
+                    Reglas = usos[cod].Distinct().ToList(),
+                    Elementos = detalle[cod].Select(d =>
+                    {
+                        var nivel = d.TextoO("grd_nivel").ToUpperInvariant();
+                        var valor = d.TextoO("grd_valor");
+                        var mapa = nivel switch { "REFERENCIA" => productos, "LINEA" => lineas, "SUBLINEA" => sublineas, _ => null };
+                        return new BonGrupoElementoDto
+                        {
+                            Nivel = nivel,
+                            Valor = valor,
+                            Nombre = mapa != null && mapa.TryGetValue(valor, out var n) ? n : null,
+                        };
+                    }).ToList(),
+                };
+            }).ToList();
+        }
+
+        // =====================================================================
         // Utilidades
         // =====================================================================
 
@@ -1112,30 +1323,20 @@ namespace Migracion.Service.Bonificados
             return prefijo + (maximo + 1).ToString("D6", CultureInfo.InvariantCulture);
         }
 
-        private async Task AuditarAsync(BonificadosSql sql, string cmpy, string? regla, string? campana, string accion,
-            object? anterior, object? nuevo, string? usuario)
-        {
-            // La auditoría no debe tumbar un cambio que ya quedó guardado.
-            try
+        private Task AuditarAsync(BonificadosSql sql, string cmpy, string? regla, string? campana, string accion,
+            object? anterior, object? nuevo, string? usuario) =>
+            BonificadosAuditoria.RegistrarAsync(sql, _logger, new BonAuditoria
             {
-                var maximo = await sql.EscalarAsync("SELECT MAX(rba_consecutivo) FROM mob_rbonaudit WHERE rba_cmpy = ?", cmpy);
-                var siguiente = (maximo == null ? 0 : Convert.ToDecimal(maximo, CultureInfo.InvariantCulture)) + 1;
-                await sql.EjecutarAsync(
-                    "INSERT INTO mob_rbonaudit (rba_cmpy, rba_consecutivo, rba_regla, rba_campana, rba_accion, " +
-                    "rba_valoranterior, rba_valornuevo, rba_codusu, rba_fecha, rba_obs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    cmpy, siguiente, regla, campana, accion,
-                    anterior == null ? null : JsonSerializer.Serialize(anterior),
-                    nuevo == null ? null : JsonSerializer.Serialize(nuevo),
-                    Usuario(usuario), DateTime.Now,
-                    // rba_codusu tiene 10 caracteres; el usuario del portal completo queda aquí.
-                    string.IsNullOrWhiteSpace(usuario) ? null : $"Portal: {usuario.Trim()}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "No se pudo auditar {Accion} de bonificados (campaña {Campana}, regla {Regla}, compañía {Cmpy}).",
-                    accion, campana, regla, cmpy);
-            }
-        }
+                Cmpy = cmpy,
+                Regla = regla,
+                Campana = campana,
+                Accion = accion,
+                Anterior = anterior,
+                Nuevo = nuevo,
+                Usuario = usuario,
+                // rba_codusu tiene 10 caracteres; el usuario del portal completo queda aquí.
+                Observacion = string.IsNullOrWhiteSpace(usuario) ? null : $"Portal: {usuario.Trim()}",
+            });
 
         /// <summary>Convierte errores de llave del motor en mensajes que el portal puede mostrar.</summary>
         private static Exception Traducir(Exception ex)
